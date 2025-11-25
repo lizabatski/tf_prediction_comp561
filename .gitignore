@@ -1,0 +1,27 @@
+# -------------------------
+# ENVIRONMENTS
+# -------------------------
+tfbinding_env/
+.env/
+venv/
+*.egg-info/
+
+# -------------------------
+# PYTHON / CACHE
+# -------------------------
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# -------------------------
+# HPC / SLURM
+# -------------------------
+slurm-*.out
+slurm-*.err
+
+datasets_chr1/
+datasets_chr1_1000bp/
+tf_check_results/
+logs/
+data/
+
