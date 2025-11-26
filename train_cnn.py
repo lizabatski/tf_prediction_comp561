@@ -604,7 +604,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max-pos-for-modisco",
         type=int,
-        default=5000,
+        default=2000,
         help="Max # positive sequences to use for TF-MoDISco",
     )
 

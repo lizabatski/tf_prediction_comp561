@@ -271,10 +271,28 @@ def main(data_path, output_prefix):
     # -------------------------
     # TF-MoDISco on POSITIVES
     # -------------------------
+    # print("\n=== Preparing positives for TF-MoDISco ===")
+    # pos_idx = np.where(y == 1)[0]
+    # X_pos = X[pos_idx]
+    # print("Positive samples:", len(X_pos))
+
+    # # Importance scores
+    # scores = compute_importance(model, X_pos, device)
+
     print("\n=== Preparing positives for TF-MoDISco ===")
     pos_idx = np.where(y == 1)[0]
     X_pos = X[pos_idx]
-    print("Positive samples:", len(X_pos))
+    print("Total positive samples:", len(X_pos))
+
+    # Subsample to 2000 for faster MoDISco
+    max_pos_for_modisco = 2000
+    if len(X_pos) > max_pos_for_modisco:
+        print(f"Subsampling to {max_pos_for_modisco} positives for TF-MoDISco")
+        np.random.seed(42)
+        subset_idx = np.random.choice(len(X_pos), max_pos_for_modisco, replace=False)
+        X_pos = X_pos[subset_idx]
+
+    print("Using", len(X_pos), "positive samples for MoDISco")
 
     # Importance scores
     scores = compute_importance(model, X_pos, device)

@@ -7,6 +7,7 @@ from sklearn.metrics import (
 )
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
+    # noqa
 from sklearn.impute import SimpleImputer
 import matplotlib.pyplot as plt
 import pickle
@@ -57,10 +58,10 @@ def score_pwm(onehot_seq, pwm):
 # MAIN TRAINING LOGIC
 # ============================================================
 
-def train_model(use_pwm, data_path, pwm_path):
+def train_model(feature_set, data_path, pwm_path):
 
     print("\n=======================================")
-    print(f"Training Logistic Regression (use_pwm={use_pwm})")
+    print(f"Training Logistic Regression ({feature_set})")
     print("=======================================\n")
 
     # --------------------------
@@ -68,7 +69,7 @@ def train_model(use_pwm, data_path, pwm_path):
     # --------------------------
     data = np.load(data_path)
 
-    X_struct = data["X_struct"]      # (N, 6) - MGW, ProT, Roll only
+    X_struct = data["X_struct"]      # (N, 6)
     X_seq = data["X_seq"]            # (N, 4, L)
     y = data["y"]                    # (N,)
 
@@ -77,37 +78,57 @@ def train_model(use_pwm, data_path, pwm_path):
     print("Sequence shape:", X_seq.shape)
     print("Labels shape:", y.shape)
 
-    # Check for NaN values
+    # Count NaNs
     nan_count = np.isnan(X_struct).sum()
     print(f"NaN values in structural features: {nan_count} ({100*nan_count/X_struct.size:.1f}%)")
 
     # --------------------------
-    # Load & compute PWM
+    # Compute PWM if needed
     # --------------------------
-    if use_pwm:
+    if feature_set in ["pwm_only", "struct_pwm"]:
+        print("Loading PWM and computing PWM scores...")
         pwm = load_pwm(pwm_path)
-        print("PWM loaded:", pwm.shape)
-
         pwm_scores = np.array([
             score_pwm(X_seq[i], pwm)
             for i in range(len(X_seq))
         ]).reshape(-1, 1)
-
         print("PWM scores shape:", pwm_scores.shape)
 
-        X = np.concatenate([X_struct, pwm_scores], axis=1)
-        model_name = "logistic_model_with_pwm.pkl"
-        scaler_name = "logistic_scaler_with_pwm.pkl"
-        imputer_name = "logistic_imputer_with_pwm.pkl"
-        print(f"Using 6 structural features + 1 PWM feature = 7 total features")
+    # --------------------------
+    # Build Feature Matrix
+    # --------------------------
+    if feature_set == "struct_only":
+        X = X_struct
+        model_name = "logistic_struct_only.pkl"
+        scaler_name = "scaler_struct_only.pkl"
+        imputer_name = "imputer_struct_only.pkl"
+        feature_names = [
+            "MGW_mean", "MGW_std",
+            "ProT_mean", "ProT_std",
+            "Roll_mean", "Roll_std"
+        ]
+        print("Using 6 structural features only.")
 
-    else:
-        print("Training WITHOUT PWM features.")
-        X = X_struct.copy()
-        model_name = "logistic_model_no_pwm.pkl"
-        scaler_name = "logistic_scaler_no_pwm.pkl"
-        imputer_name = "logistic_imputer_no_pwm.pkl"
-        print(f"Using 6 structural features only")
+    elif feature_set == "pwm_only":
+        X = pwm_scores
+        model_name = "logistic_pwm_only.pkl"
+        scaler_name = "scaler_pwm_only.pkl"
+        imputer_name = "imputer_pwm_only.pkl"
+        feature_names = ["PWM_score"]
+        print("Using PWM score only.")
+
+    elif feature_set == "struct_pwm":
+        X = np.concatenate([X_struct, pwm_scores], axis=1)
+        model_name = "logistic_struct_pwm.pkl"
+        scaler_name = "scaler_struct_pwm.pkl"
+        imputer_name = "imputer_struct_pwm.pkl"
+        feature_names = [
+            "MGW_mean", "MGW_std",
+            "ProT_mean", "ProT_std",
+            "Roll_mean", "Roll_std",
+            "PWM_score"
+        ]
+        print("Using structural + PWM features.")
 
     print("Final feature matrix:", X.shape)
 
@@ -128,12 +149,12 @@ def train_model(use_pwm, data_path, pwm_path):
         X_train, X_test = X[train_idx], X[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
 
-        # Impute missing values FIRST (replace NaN with mean)
+        # Impute missing values
         imputer = SimpleImputer(strategy='mean')
         X_train_imputed = imputer.fit_transform(X_train)
         X_test_imputed = imputer.transform(X_test)
 
-        # Then standardize features
+        # Standardize
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train_imputed)
         X_test_scaled = scaler.transform(X_test_imputed)
@@ -167,32 +188,28 @@ def train_model(use_pwm, data_path, pwm_path):
         print(f"Fold {fold} AUROC:    {auroc:.4f}")
         print(f"Fold {fold} AUPRC:    {auprc:.4f}")
 
-        # --------------------------------------
-        # Save ROC curve
-        # --------------------------------------
+        # ROC plot
         fpr, tpr, _ = roc_curve(y_test, y_prob)
         plt.figure()
         plt.plot(fpr, tpr, label=f"AUC={auroc:.3f}")
         plt.xlabel("False Positive Rate")
         plt.ylabel("True Positive Rate")
-        plt.title(f"Logistic Regression ROC – Fold {fold}")
+        plt.title(f"ROC – Fold {fold}")
         plt.legend()
         plt.tight_layout()
-        plt.savefig(f"logistic_roc_fold{fold}_usePWM_{use_pwm}.png", dpi=200)
+        plt.savefig(f"logistic_roc_fold{fold}_{feature_set}.png", dpi=200)
         plt.close()
 
-        # --------------------------------------
-        # Save PR curve
-        # --------------------------------------
+        # PR curve
         prec, recall, _ = precision_recall_curve(y_test, y_prob)
         plt.figure()
         plt.plot(recall, prec, label=f"AUPRC={auprc:.3f}")
         plt.xlabel("Recall")
         plt.ylabel("Precision")
-        plt.title(f"Logistic Regression PR – Fold {fold}")
+        plt.title(f"PR – Fold {fold}")
         plt.legend()
         plt.tight_layout()
-        plt.savefig(f"logistic_pr_fold{fold}_usePWM_{use_pwm}.png", dpi=200)
+        plt.savefig(f"logistic_pr_fold{fold}_{feature_set}.png", dpi=200)
         plt.close()
 
         fold += 1
@@ -207,20 +224,20 @@ def train_model(use_pwm, data_path, pwm_path):
     print(f"AUPRC:    mean={np.mean(auprcs):.4f}, std={np.std(auprcs):.4f}")
 
     # ============================================================
-    # Train FINAL model on full dataset
+    # Train FINAL model
     # ============================================================
 
     print("\n===== Training Final Model =====")
 
-    # Impute missing values on full dataset
+    # Impute full dataset
     final_imputer = SimpleImputer(strategy='mean')
     X_imputed = final_imputer.fit_transform(X)
 
-    # Standardize
+    # Scale full dataset
     final_scaler = StandardScaler()
     X_scaled = final_scaler.fit_transform(X_imputed)
 
-    # Train final model
+    # Train
     final_model = LogisticRegression(
         penalty='l2',
         C=1.0,
@@ -232,13 +249,13 @@ def train_model(use_pwm, data_path, pwm_path):
 
     final_model.fit(X_scaled, y)
 
-    # Save model, scaler, and imputer
+    # Save model artifacts
     with open(model_name, 'wb') as f:
         pickle.dump(final_model, f)
-    
+
     with open(scaler_name, 'wb') as f:
         pickle.dump(final_scaler, f)
-    
+
     with open(imputer_name, 'wb') as f:
         pickle.dump(final_imputer, f)
 
@@ -246,39 +263,26 @@ def train_model(use_pwm, data_path, pwm_path):
     print(f"Saved scaler → {scaler_name}")
     print(f"Saved imputer → {imputer_name}")
 
-    # Print feature coefficients
+    # Coefficients
     print("\n===== Feature Importance (Coefficients) =====")
-    if use_pwm:
-        feature_names = [
-            "MGW_mean", "MGW_std",
-            "ProT_mean", "ProT_std",
-            "Roll_mean", "Roll_std",
-            "PWM_score"
-        ]
-    else:
-        feature_names = [
-            "MGW_mean", "MGW_std",
-            "ProT_mean", "ProT_std",
-            "Roll_mean", "Roll_std"
-        ]
-    
     coefs = final_model.coef_[0]
     for name, coef in zip(feature_names, coefs):
         print(f"  {name:15s}: {coef:+.4f}")
 
 
 # ============================================================
-# CLI ARGPARSE ENTRYPOINT
+# CLI ENTRYPOINT
 # ============================================================
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--use-pwm",
-        type=lambda x: x.lower() == "true",
-        default=True,
-        help="Whether to include PWM score as a feature."
+        "--feature-set",
+        type=str,
+        choices=["struct_only", "pwm_only", "struct_pwm"],
+        default="struct_pwm",
+        help="Choose: struct_only, pwm_only, or struct_pwm"
     )
 
     parser.add_argument(
@@ -298,7 +302,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train_model(
-        use_pwm=args.use_pwm,
+        feature_set=args.feature_set,
         data_path=args.data_path,
         pwm_path=args.pwm_path
     )

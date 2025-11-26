@@ -15,15 +15,18 @@ CHR1_FASTA = "data/reference/chr1.fa"
 CHR_NAME = "chr1"
 
 # structural tracks for chr1 from RohsDB
-MGW_WIG  = "data/structural/hg19.chr1.MGW.2nd.wig"
-PROT_WIG = "data/structural/hg19.chr1.ProT.2nd.wig"
-ROLL_WIG = "data/structural/hg19.chr1.Roll.2nd.wig"
+BUCKLE_WIG  = "data/structural/hg19.Buckle.chr1.wig"
+MGW_WIG     = "data/structural/hg19.MGW.2nd.chr1.wig"
+OPENING_WIG = "data/structural/hg19.Opening.chr1.wig"
+PROT_WIG    = "data/structural/hg19.ProT.2nd.chr1.wig"
+ROLL_WIG    = "data/structural/hg19.Roll.2nd.chr1.wig"
+
 
 OUTPUT_DIR = "datasets_chr1_1000bp"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 TARGET_TFS = ["CTCF", "EGR1", "GATA1"]
-WINDOW_SIZE = 1000
+WINDOW_SIZE = 20
 HALF = WINDOW_SIZE // 2
 
 
@@ -173,17 +176,32 @@ reg = load_regulatory_bed()
 print(f"Found {len(reg)} regulatory regions on {CHR_NAME}")
 
 print(f"\nLoading structural tracks for {CHR_NAME}...")
+
+# Buckle
+start_time = time.time()
+buckle_arr = load_wig_track_to_array(BUCKLE_WIG, CHR_NAME, chrom_len)
+print(f"  Buckle loaded in {time.time() - start_time:.2f} seconds")
+
+# MGW
 start_time = time.time()
 mgw_arr = load_wig_track_to_array(MGW_WIG, CHR_NAME, chrom_len)
 print(f"  MGW loaded in {time.time() - start_time:.2f} seconds")
 
+# Opening
+start_time = time.time()
+opening_arr = load_wig_track_to_array(OPENING_WIG, CHR_NAME, chrom_len)
+print(f"  Opening loaded in {time.time() - start_time:.2f} seconds")
+
+# ProT
 start_time = time.time()
 prot_arr = load_wig_track_to_array(PROT_WIG, CHR_NAME, chrom_len)
 print(f"  ProT loaded in {time.time() - start_time:.2f} seconds")
 
+# Roll
 start_time = time.time()
 roll_arr = load_wig_track_to_array(ROLL_WIG, CHR_NAME, chrom_len)
 print(f"  Roll loaded in {time.time() - start_time:.2f} seconds")
+
 
 
 # ============================================================
@@ -242,21 +260,21 @@ def extract_seq(start, end, strand):
 
 def extract_struct_features(start, end):
     """
-    For window [start, end) on chr1, compute mean + std
-    for each structural track (ignoring NaNs).
-
-    Returns a vector of length 6:
-        [MGW_mean, MGW_std,
-         ProT_mean, ProT_std,
-         Roll_mean, Roll_std]
+    Compute mean + std for each structural track.
+    Tracks: Buckle, MGW, Opening, ProT, Roll
+    Returns a vector of length 10.
     """
     s = slice(start, end)
 
-    window_mgw  = mgw_arr[s]
-    window_prot = prot_arr[s]
-    window_roll = roll_arr[s]
+    # order matches the loading order
+    tracks = [
+        buckle_arr[s],
+        mgw_arr[s],
+        opening_arr[s],
+        prot_arr[s],
+        roll_arr[s],
+    ]
 
-    tracks = [window_mgw, window_prot, window_roll]
     feats = []
 
     for arr in tracks:
@@ -268,6 +286,7 @@ def extract_struct_features(start, end):
             feats.append(arr[finite].std())
 
     return np.array(feats, dtype=np.float32)
+
 
 
 # ============================================================
