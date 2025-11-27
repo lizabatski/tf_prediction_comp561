@@ -54,10 +54,10 @@ def score_pwm(onehot_seq, pwm):
 # MAIN TRAINING LOGIC
 # ============================================================
 
-def train_model(use_pwm, data_path, pwm_path):
+def train_model(mode, data_path, pwm_path):
 
     print("\n=======================================")
-    print(f"Training XGBoost model (use_pwm={use_pwm})")
+    print(f"Training XGBoost model (mode={mode})")
     print("=======================================\n")
 
     # --------------------------
@@ -65,7 +65,7 @@ def train_model(use_pwm, data_path, pwm_path):
     # --------------------------
     data = np.load(data_path)
 
-    X_struct = data["X_struct"]      # (N, 6) now - MGW, ProT, Roll only
+    X_struct = data["X_struct"]      # (N, 10)
     X_seq = data["X_seq"]            # (N, 4, 20)
     y = data["y"]                    # (N,)
 
@@ -78,10 +78,11 @@ def train_model(use_pwm, data_path, pwm_path):
     nan_count = np.isnan(X_struct).sum()
     print(f"NaN values in structural features: {nan_count} ({100*nan_count/X_struct.size:.1f}%)")
 
-    # --------------------------
-    # Load & compute PWM
-    # --------------------------
-    if use_pwm:
+    # ============================================================
+    # PWM feature construction
+    # ============================================================
+
+    if mode in ["pwm", "struct_pwm"]:
         pwm = load_pwm(pwm_path)
         print("PWM loaded:", pwm.shape)
 
@@ -92,17 +93,29 @@ def train_model(use_pwm, data_path, pwm_path):
 
         print("PWM scores shape:", pwm_scores.shape)
 
+    # ============================================================
+    # MODE SELECTION
+    # ============================================================
+
+    print(f"\nSelected MODE: {mode}")
+
+    # STRUCT features (10)
+    if mode == "struct":
+        X = X_struct.copy()
+        print("Using STRUCT features only:", X.shape)
+
+    # PWM only
+    elif mode == "pwm":
+        X = pwm_scores.copy()
+        print("Using PWM feature only:", X.shape)
+
+    # STRUCT + PWM
+    elif mode == "struct_pwm":
         X = np.concatenate([X_struct, pwm_scores], axis=1)
-        model_name = "xgb_model_with_pwm.json"
-        print(f"Using 6 structural features + 1 PWM feature = 7 total features")
+        print("Using STRUCT + PWM features:", X.shape)
 
     else:
-        print("Training WITHOUT PWM features.")
-        X = X_struct.copy()
-        model_name = "xgb_model_no_pwm.json"
-        print(f"Using 6 structural features only")
-
-    print("Final feature matrix:", X.shape)
+        raise ValueError(f"Unknown mode: {mode}")
 
     # ============================================================
     # 5-FOLD CROSS VALIDATION
@@ -164,7 +177,7 @@ def train_model(use_pwm, data_path, pwm_path):
         plt.title(f"XGBoost ROC Curve – Fold {fold}")
         plt.legend()
         plt.tight_layout()
-        plt.savefig(f"xgb_roc_fold{fold}_usePWM_{use_pwm}.png", dpi=200)
+        plt.savefig(f"xgb_roc_fold{fold}_mode_{mode}.png", dpi=200)
         plt.close()
 
         # --------------------------------------
@@ -178,7 +191,7 @@ def train_model(use_pwm, data_path, pwm_path):
         plt.title(f"XGBoost PR Curve – Fold {fold}")
         plt.legend()
         plt.tight_layout()
-        plt.savefig(f"xgb_pr_fold{fold}_usePWM_{use_pwm}.png", dpi=200)
+        plt.savefig(f"xgb_pr_fold{fold}_mode_{mode}.png", dpi=200)
         plt.close()
 
         fold += 1
@@ -210,24 +223,35 @@ def train_model(use_pwm, data_path, pwm_path):
     )
 
     final_model.fit(X, y)
-    final_model.save_model(model_name)
+    final_model.save_model(f"xgb_final_model_mode_{mode}.json")
 
-    print(f"\nSaved final model → {model_name}")
+    print(f"\nSaved final model → xgb_final_model_mode_{mode}.json")
     
     # ============================================================
     # Feature importance
     # ============================================================
     
     print("\n===== Feature Importance =====")
-    feature_names = [
-        "MGW_mean", "MGW_std",
-        "ProT_mean", "ProT_std",
-        "Roll_mean", "Roll_std"
+
+    feature_names_struct = [
+        "Buckle_mean","Buckle_std",
+        "MGW_mean","MGW_std",
+        "Opening_mean","Opening_std",
+        "ProT_mean","ProT_std",
+        "Roll_mean","Roll_std"
     ]
-    if use_pwm:
-        feature_names.append("PWM_score")
-    
+
+    if mode == "struct":
+        feature_names = feature_names_struct
+
+    elif mode == "pwm":
+        feature_names = ["PWM_score"]
+
+    elif mode == "struct_pwm":
+        feature_names = feature_names_struct + ["PWM_score"]
+
     importances = final_model.feature_importances_
+
     for name, imp in zip(feature_names, importances):
         print(f"  {name:15s}: {imp:.4f}")
 
@@ -240,30 +264,29 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--use-pwm",
-        type=lambda x: x.lower() == "true",
-        default=True,
-        help="Whether to include PWM score as a feature."
+        "--mode",
+        type=str,
+        choices=["struct", "pwm", "struct_pwm"],
+        default="struct",
+        help="Feature mode: struct, pwm, or struct_pwm."
     )
 
     parser.add_argument(
         "--data-path",
         type=str,
-        default="datasets_chr1/ctcf_chr1_dataset_struct.npz",
-        help="Path to dataset file."
+        default="datasets_chr1/ctcf_chr1_dataset_struct.npz"
     )
 
     parser.add_argument(
         "--pwm-path",
         type=str,
-        default="data/factorbook/factorbookMotifPwm.txt",
-        help="Path to PWM file."
+        default="data/factorbook/factorbookMotifPwm.txt"
     )
 
     args = parser.parse_args()
 
     train_model(
-        use_pwm=args.use_pwm,
+        mode=args.mode,
         data_path=args.data_path,
         pwm_path=args.pwm_path
     )

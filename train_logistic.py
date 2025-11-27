@@ -278,7 +278,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--feature-set",
+        "--mode",
         type=str,
         choices=["struct_only", "pwm_only", "struct_pwm"],
         default="struct_pwm",
