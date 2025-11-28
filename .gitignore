@@ -1,27 +1,80 @@
 # -------------------------
 # ENVIRONMENTS
 # -------------------------
-tfbinding_env/
-.env/
+# Conda / venv / pipenv
 venv/
+.env/
+tfbinding_env/
 *.egg-info/
 
 # -------------------------
-# PYTHON / CACHE
+# PYTHON CACHE
 # -------------------------
 __pycache__/
 *.pyc
+*.pyo
 .ipynb_checkpoints/
 
 # -------------------------
-# HPC / SLURM
+# MODEL WEIGHTS
+# -------------------------
+*.pt
+*.pth
+*.h5
+*.ckpt
+*.joblib
+*.pkl
+*.json
+*.onnx
+
+# -------------------------
+# DATASETS / RAW DATA
+# -------------------------
+datasets_chr1/
+datasets_chr1_1000bp/
+datasets_chr1_take1/
+#datasets_chr1_optionC_fast/
+data/
+#real_results/
+model_results/
+
+# BigWig / reference data
+*.bw
+*.fa
+*.fai
+*.bed
+*.npy
+*.npz
+
+# Safe exclude specific files inside data/
+data/**
+
+# -------------------------
+# LOGS
+# -------------------------
+logs/
+tf_check_results/
+seqcnn_motifs/
+#activation_motifs/
+figures/
+
+# -------------------------
+# HPC / SLURM OUTPUT
 # -------------------------
 slurm-*.out
 slurm-*.err
 
-datasets_chr1/
-datasets_chr1_1000bp/
-tf_check_results/
-logs/
-data/
+# -------------------------
+# SCRIPT ARTIFACTS
+# -------------------------
+*.log
+*.tmp
+*.bak
 
+# -------------------------
+# OS / EDITOR / MISC
+# -------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

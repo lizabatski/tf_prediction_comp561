@@ -1,41 +1,30 @@
 import os
 import shutil
 
-BASE = "."   # current directory
+def main():
+    files = [f for f in os.listdir('.') if f.endswith('.png')]
 
-# Output folders
-folders = {
-    "struct_only": "struct_only",
-    "pwm_only": "pwm_only",
-    "struct_pwm": "struct_pwm",
-}
+    for fname in files:
+        if "struct_only" in fname:
+            out_dir = "struct_only"
+        elif "pwm_only" in fname:
+            out_dir = "pwm_only"
+        else:
+            print(f"Skipping (no mode match): {fname}")
+            continue
 
-# Create directories if missing
-for f in folders.values():
-    os.makedirs(f, exist_ok=True)
+        os.makedirs(out_dir, exist_ok=True)
 
-# Scan files in directory
-for fname in os.listdir(BASE):
+        src = os.path.join(".", fname)
+        dst = os.path.join(out_dir, fname)
 
-    if os.path.isdir(fname):
-        continue  # skip folders
+        print(f"Moving {fname} → {dst}")
+        shutil.move(src, dst)
 
-    # Decide category
-    if "struct_pwm" in fname:
-        dest = folders["struct_pwm"]
-    elif "struct_only" in fname:
-        dest = folders["struct_only"]
-    elif "pwm_only" in fname:
-        dest = folders["pwm_only"]
-    else:
-        continue  # not a result file
+    print("\nDone! Files sorted into:")
+    print("  struct_only/")
+    print("  pwm_only/")
 
-    src_path = os.path.join(BASE, fname)
-    dst_path = os.path.join(dest, fname)
 
-    print(f"Moving {fname} → {dest}/")
-    shutil.move(src_path, dst_path)
-
-print("\nDone! Files sorted into:")
-for key, val in folders.items():
-    print(f"  - {val}/")
+if __name__ == "__main__":
+    main()
